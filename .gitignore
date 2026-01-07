@@ -57,25 +57,8 @@ logs/
 # PDP images
 PDP/
 
-# images
-images/
-identities/
-results/
-NOS_ALL/
-
-# Generated reports
-processing_summary.csv
-processing_details.csv
-analysis_report.txt
-analysis_plots/
-analysis_plots_*/
-images_to_regenerate.csv
-
 # templates
 templates/
 
 # old files
 old/
-
-# server API
-app.py
