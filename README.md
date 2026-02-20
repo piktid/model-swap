@@ -5,25 +5,35 @@
 </p>
 
 # Model Swap - v1.0
-[![Official Website](https://img.shields.io/badge/Official%20Website-piktid.com-blue?style=flat&logo=world&logoColor=white)](https://piktid.com)
+[![Official Website](https://img.shields.io/badge/Official%20Website-on--model.com-blue?style=flat&logo=world&logoColor=white)](https://on-model.com)
+[![On-Model App](https://img.shields.io/badge/On--Model%20App-beta.on--model.com-green?style=flat&logo=world&logoColor=white)](https://beta.on-model.com)
 [![Discord Follow](https://dcbadge.vercel.app/api/server/FJU39e9Z4P?style=flat)](https://discord.com/invite/FJU39e9Z4P)
 
 Model Swap implementation by PiktID for processing Product Detail Page (PDP) images. This script performs automated model-swap on multiple images in a folder using the <a href="https://v2.api.piktid.com">PiktID v2 API</a>.
 
-This implementation uses the <a href="https://docs.piktid.com/docs/v2">PiktID v2 API</a> for model-swap processing.
+## About On-Model
+
+[On-Model](https://on-model.com) is an AI-powered platform by PiktID designed for fashion e-commerce. It enables brands, retailers, and marketplaces to transform their product imagery at scale:
+
+- **Model Swap** — Replace models in existing product photos while preserving garments exactly as they are
+- **Flat-to-Model** — Convert flat-lay product photography into realistic on-model images
+- **Identity Management** — Create and maintain consistent AI model identities across your entire catalog
+
+Try the platform at [beta.on-model.com](https://beta.on-model.com) or learn more at [on-model.com](https://on-model.com).
 
 ## Getting Started
 
 The following instructions suppose you have already installed a recent version of Python. For a general overview, please visit the <a href="https://docs.piktid.com/docs/v2">API documentation</a>.
 To use any PiktID API, authentication credentials are required.
 
-> **Step 0** - Register <a href="https://studio.piktid.com">here</a>. 10 credits are given for free to all new users.
+> **Step 0** - Register at <a href="https://beta.on-model.com">beta.on-model.com</a>. 10 credits are given for free to all new users.
 
 > **Step 1** - Clone the Model Swap repository
 ```bash
 # Installation commands
 $ git clone https://github.com/piktid/model-swap.git
 $ cd model-swap
+$ pip install requests
 ```
 
 > **Step 2** - Prepare your PDP folder with images
@@ -42,7 +52,7 @@ $ python model_swap.py \
   --input-folder PDP/ARTICLE123 \
   --username your_email@example.com \
   --password your_password \
-  --identity-code PiktidPremium \
+  --identity-code PiktidSummer \
   --output-folder results/ARTICLE123
 ```
 
@@ -52,7 +62,7 @@ $ python model_swap.py \
   --input-folder PDP/ARTICLE123 \
   --username your_email@example.com \
   --password your_password \
-  --identity-image identities/female/LisaPremium.jpg \
+  --identity-image identities/female/LisaSummer.jpg \
   --output-folder results/ARTICLE123
 ```
 
@@ -60,8 +70,8 @@ $ python model_swap.py \
 
 The script will automatically:
 1. Authenticate with the API
-2. Create a project (or use existing one)
-3. Upload all PDP images from the input folder
+2. Upload all PDP images from the input folder
+3. Create a project (or reuse an existing one)
 4. Upload or verify the identity
 5. Create a model-swap job
 6. Monitor job progress
@@ -86,6 +96,22 @@ The `metadata.json` file contains:
 - Quality scores and processing times
 - Image URLs and metadata
 
+## API Flow
+
+The script follows this sequence of API calls:
+
+```
+1. POST /auth/login         -> Authenticate (Basic Auth -> JWT token)
+2. POST /upload             -> Get pre-signed S3 URL + file_id (per image)
+3. PUT  <upload_url>        -> Upload image binary to S3
+4. POST /project            -> Create project (get project_id)
+5. GET  /identity/<code>    -> Verify identity exists
+   or POST /identity/upload -> Upload new identity image
+6. POST /model-swap         -> Submit job with project_id + file_ids + identity_code
+7. GET  /jobs/<id>/status   -> Poll until status = "completed"
+8. GET  /jobs/<id>/results  -> Fetch output images (CloudFront URLs)
+```
+
 ## Post-Processing
 
 If you want to enable post-processing (skin equalization) for better results:
@@ -94,7 +120,7 @@ $ python model_swap.py \
   --input-folder PDP/ARTICLE123 \
   --username your_email@example.com \
   --password your_password \
-  --identity-code PiktidPremium \
+  --identity-code PiktidSummer \
   --output-folder results/ARTICLE123 \
   --post-process
 ```
@@ -124,7 +150,7 @@ $ python model_swap.py \
   --input-folder PDP/P1KT1D-Y22 \
   --username your_email@example.com \
   --password your_password \
-  --identity-code PiktidPremium \
+  --identity-code PiktidSummer \
   --output-folder output/P1KT1D-Y22
 ```
 
@@ -136,7 +162,7 @@ $ python model_swap.py \
   --input-folder PDP/P1KT1D-Y22 \
   --username your_email@example.com \
   --password your_password \
-  --identity-image identities/female/LisaPremium.jpg \
+  --identity-image identities/female/LisaSummer.jpg \
   --output-folder output/P1KT1D-Y22
 ```
 
@@ -148,24 +174,67 @@ $ python model_swap.py \
   --input-folder PDP/P1KT1D-Y22 \
   --username your_email@example.com \
   --password your_password \
-  --identity-code PiktidPremium \
+  --identity-code PiktidSummer \
   --output-folder output/P1KT1D-Y22 \
   --post-process
 ```
 
-### Example 4: Custom API Server
+## Batch Processing (Parallel)
 
-Process images on a custom API server:
+For processing multiple PDP folders at once, use `batch_swap.py`. It runs multiple `ModelSwap` instances in parallel using a thread pool, with each worker handling a complete independent workflow.
+
+### Process all subfolders in a directory
+
 ```bash
-$ python model_swap.py \
-  --input-folder PDP/P1KT1D-Y22 \
-  --identity-code PiktidPremium \
-  --output-folder output/P1KT1D-Y22 \
-  --base-url https://v2.api.piktid.com \
+$ python batch_swap.py \
+  --input-dir PDP/ \
   --username your_email@example.com \
   --password your_password \
-  --post-process
+  --identity-code PiktidSummer \
+  --output-dir results/
 ```
+
+This scans `PDP/` for subfolders and processes each one as a separate job. Results are saved to `results/<folder-name>/`.
+
+### Process specific folders
+
+```bash
+$ python batch_swap.py \
+  --input-folders PDP/ARTICLE1 PDP/ARTICLE2 PDP/ARTICLE3 \
+  --username your_email@example.com \
+  --password your_password \
+  --identity-image identities/female/LisaSummer.jpg \
+  --output-dir results/ \
+  --parallel 5
+```
+
+### Batch Command Line Options
+
+```
+--input-dir         Directory containing PDP subfolders (mutually exclusive with --input-folders)
+--input-folders     Specific PDP folder paths to process (mutually exclusive with --input-dir)
+--username          API username (required)
+--password          API password (required)
+--identity-code     Existing identity code to use (optional)
+--identity-image    Path to identity image file to upload (optional)
+--output-dir        Base output directory (default: output)
+--base-url          API base URL (default: https://v2.api.piktid.com)
+--post-process      Enable post-processing (default: False)
+--parallel          Number of parallel workers (default: 3, max: 5)
+```
+
+Parallelism is capped at 5 to respect the API rate limit (5 requests/minute on `/model-swap`). The built-in retry mechanism handles any 429 responses that occur when jobs are submitted close together.
+
+A JSON summary file is saved to the output directory after each batch run with timing and success/failure details for every folder.
+
+## Rate Limiting and Resilience
+
+The script includes built-in handling for API rate limits and token expiry:
+
+- **Rate limiting (429):** All API calls automatically retry with exponential backoff (1s, 2s, 4s, 8s, 16s) plus random jitter, up to 5 retries per request
+- **Token expiry (401):** If a token expires during a long-running workflow, the script re-authenticates automatically and retries the failed request
+
+The `/model-swap` endpoint is rate-limited to **5 requests per minute**. The retry mechanism handles this transparently.
 
 ## Troubleshooting
 
@@ -179,7 +248,7 @@ Authentication failed: 401
 ```
 No processable images found in PDP/ARTICLE123
 ```
-**Solution:** 
+**Solution:**
 - Verify the input folder path is correct
 - Check that the folder contains image files (JPG, JPEG, PNG)
 - Note: Images with `_INTERNAL_` or `_NONMODEL_` in filenames are automatically excluded
@@ -188,9 +257,15 @@ No processable images found in PDP/ARTICLE123
 ```
 Error checking identity: ...
 ```
-**Solution:** 
-- Verify the identity code exists in your gallery
+**Solution:**
+- Verify the identity code exists in your gallery at [beta.on-model.com](https://beta.on-model.com)
 - Or provide an `--identity-image` path to upload a new identity
+
+### Rate Limited
+```
+Rate limited (429). Waiting 2.1s before retry 1/5...
+```
+This is normal behavior. The script automatically retries with increasing delays. If you see "Max retries exceeded", wait a minute and try again.
 
 ### Job Timeout
 ```
@@ -202,7 +277,7 @@ Timeout: Job took longer than 1200 seconds
 ```
 Authentication error: Connection refused
 ```
-**Solution:** 
+**Solution:**
 - Verify the API server is running
 - Check the `--base-url` is correct
 - Ensure network connectivity to the API server
@@ -216,8 +291,17 @@ The script will exit with an error code if:
 - Job creation fails
 - Job does not complete successfully
 - Results download fails
+- Rate limit retries are exhausted
 
 Check the console output for detailed error messages.
+
+## Links
+
+- [On-Model Website](https://on-model.com) — Learn about the platform
+- [On-Model App](https://beta.on-model.com) — Try the app (beta)
+- [API Documentation](https://docs.piktid.com/docs/v2) — Full API reference
+- [PiktID](https://piktid.com) — Company website
+- [Discord](https://discord.com/invite/FJU39e9Z4P) — Community and support
 
 ## Contact
 office@piktid.com

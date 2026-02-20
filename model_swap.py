@@ -16,6 +16,7 @@ import argparse
 import base64
 import http.client
 import json
+import random
 import time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -67,15 +68,61 @@ class ModelSwap:
         if not self.access_token:
             return {}
         return {"Authorization": f"Bearer {self.access_token}"}
-    
+
+    def _request_with_retry(self, method, url, max_retries=5, initial_delay=1.0, max_delay=60.0, **kwargs):
+        """Make an authenticated request with retry on rate limiting (429) and re-auth on token expiry (401).
+
+        Args:
+            method: HTTP method ('get', 'post', etc.)
+            url: Full URL to request
+            max_retries: Maximum retry attempts for 429 responses (default: 5)
+            initial_delay: Initial backoff delay in seconds (default: 1.0)
+            max_delay: Maximum delay between retries (default: 60.0)
+            **kwargs: Additional arguments passed to requests (json, params, timeout, etc.)
+
+        Returns:
+            Response object
+        """
+        delay = initial_delay
+        request_func = getattr(requests, method.lower())
+
+        for attempt in range(max_retries + 1):
+            headers = {**kwargs.pop("headers", {}), **self.get_auth_headers()}
+            response = request_func(url, headers=headers, **kwargs)
+
+            # Handle 401 - token expired, re-authenticate and retry once
+            if response.status_code == 401:
+                print("Token expired, re-authenticating...")
+                if self.login():
+                    headers = {**self.get_auth_headers()}
+                    response = request_func(url, headers=headers, **kwargs)
+                if response.status_code != 429:
+                    return response
+
+            # Not rate limited - return immediately
+            if response.status_code != 429:
+                return response
+
+            # Rate limited (429) - retry with exponential backoff + jitter
+            if attempt < max_retries:
+                jitter = delay * 0.2 * (2 * random.random() - 1)
+                wait_time = min(delay + jitter, max_delay)
+                print(f"Rate limited (429). Waiting {wait_time:.1f}s before retry {attempt + 1}/{max_retries}...")
+                time.sleep(wait_time)
+                delay = min(delay * 2, max_delay)
+            else:
+                print(f"Rate limited (429). Max retries ({max_retries}) exceeded.")
+
+        return response
+
     def create_project(self, project_name):
         """Create a project on the API server."""
         print(f"Creating project '{project_name}'...")
         
         try:
-            response = requests.post(
+            response = self._request_with_retry(
+                "post",
                 f"{self.base_url}/project",
-                headers=self.get_auth_headers(),
                 json={"project_name": project_name}
             )
             
@@ -86,11 +133,16 @@ class ModelSwap:
                 print(f"Project created: {self.project_id}")
                 return True
             elif response.status_code == 409:
-                # Project already exists, get its ID
+                # Project already exists, get its ID from the response
                 print(f"Project '{project_name}' already exists")
-                # We'll get project_id from the first upload
-                self.project_name = project_name
-                return True
+                data = response.json()
+                if "project_id" in data:
+                    self.project_id = data["project_id"]
+                    self.project_name = project_name
+                    print(f"Using existing project: {self.project_id}")
+                    return True
+                # Fallback: list projects to find the matching one
+                return self._find_project_by_name(project_name)
             else:
                 print(f"Failed to create project: {response.status_code}")
                 print(f"Response: {response.text}")
@@ -98,25 +150,40 @@ class ModelSwap:
         except Exception as e:
             print(f"Error creating project: {e}")
             return False
-    
+
+    def _find_project_by_name(self, project_name):
+        """Find an existing project by name via the list endpoint."""
+        try:
+            response = self._request_with_retry(
+                "get",
+                f"{self.base_url}/project",
+                params={"per_page": 100}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                for project in data.get("projects", []):
+                    if project.get("project_text") == project_name:
+                        self.project_id = project.get("project_key", project.get("project_id"))
+                        self.project_name = project_name
+                        print(f"Found existing project: {self.project_id}")
+                        return True
+            print(f"Could not find project '{project_name}'")
+            return False
+        except Exception as e:
+            print(f"Error listing projects: {e}")
+            return False
+
     def get_upload_url(self, filename):
         """Get a pre-signed upload URL for an image."""
         try:
-            response = requests.post(
+            response = self._request_with_retry(
+                "post",
                 f"{self.base_url}/upload",
-                headers=self.get_auth_headers(),
-                json={
-                    "project_name": self.project_name,
-                    "filename": filename
-                }
+                json={"filename": filename}
             )
-            
+
             if response.status_code == 200:
-                data = response.json()
-                # Store project_id from first upload if we don't have it
-                if not self.project_id and "project_id" in data:
-                    self.project_id = data["project_id"]
-                return data
+                return response.json()
             else:
                 print(f"Failed to get upload URL: {response.status_code}")
                 print(f"Response: {response.text}")
@@ -215,9 +282,9 @@ class ModelSwap:
         if self.identity_code:
             # Check if identity exists
             try:
-                response = requests.get(
-                    f"{self.base_url}/identity/{self.identity_code}",
-                    headers=self.get_auth_headers()
+                response = self._request_with_retry(
+                    "get",
+                    f"{self.base_url}/identity/{self.identity_code}"
                 )
                 if response.status_code == 200:
                     data = response.json()
@@ -229,7 +296,7 @@ class ModelSwap:
         if self.identity_image and self.identity_image.exists():
             # Upload new identity
             print(f"Uploading identity image: {self.identity_image.name}...")
-            
+
             try:
                 # Detect content type from file extension
                 suffix = self.identity_image.suffix.lower()
@@ -239,19 +306,32 @@ class ModelSwap:
                     ".png": "image/png"
                 }
                 content_type = content_type_map.get(suffix, "image/jpeg")
-                
-                with open(self.identity_image, "rb") as f:
-                    files = {"image": (self.identity_image.name, f, content_type)}
-                    data = {"name": self.identity_image.stem}
-                    
-                    response = requests.post(
-                        f"{self.base_url}/identity/upload",
-                        headers=self.get_auth_headers(),
-                        files=files,
-                        data=data,
-                        timeout=30
-                    )
-                
+
+                # Retry loop for multipart upload (file must be re-opened each attempt)
+                delay = 1.0
+                max_retries = 5
+                for attempt in range(max_retries + 1):
+                    with open(self.identity_image, "rb") as f:
+                        files = {"image": (self.identity_image.name, f, content_type)}
+                        form_data = {"name": self.identity_image.stem}
+
+                        response = requests.post(
+                            f"{self.base_url}/identity/upload",
+                            headers=self.get_auth_headers(),
+                            files=files,
+                            data=form_data,
+                            timeout=30
+                        )
+
+                    if response.status_code == 429 and attempt < max_retries:
+                        jitter = delay * 0.2 * (2 * random.random() - 1)
+                        wait_time = min(delay + jitter, 60.0)
+                        print(f"Rate limited (429). Waiting {wait_time:.1f}s before retry {attempt + 1}/{max_retries}...")
+                        time.sleep(wait_time)
+                        delay = min(delay * 2, 60.0)
+                        continue
+                    break
+
                 if response.status_code in [200, 201]:
                     identity_data = response.json()
                     identity_code = identity_data["identity_code"]
@@ -286,9 +366,9 @@ class ModelSwap:
         }
         
         try:
-            response = requests.post(
+            response = self._request_with_retry(
+                "post",
                 f"{self.base_url}/model-swap",
-                headers=self.get_auth_headers(),
                 json=payload
             )
             
@@ -321,9 +401,9 @@ class ModelSwap:
                 return None
             
             try:
-                response = requests.get(
-                    f"{self.base_url}/jobs/{job_id}/status",
-                    headers=self.get_auth_headers()
+                response = self._request_with_retry(
+                    "get",
+                    f"{self.base_url}/jobs/{job_id}/status"
                 )
                 
                 if response.status_code == 404:
@@ -362,9 +442,9 @@ class ModelSwap:
         print("Retrieving results...")
         
         try:
-            response = requests.get(
-                f"{self.base_url}/jobs/{job_id}/results",
-                headers=self.get_auth_headers()
+            response = self._request_with_retry(
+                "get",
+                f"{self.base_url}/jobs/{job_id}/results"
             )
             
             if response.status_code != 200:
