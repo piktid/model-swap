@@ -56,6 +56,8 @@ logs/
 
 # PDP images
 PDP/
+output/
+results/
 
 # templates
 templates/
