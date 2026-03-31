@@ -3,17 +3,17 @@
 Minimal script to process a single PDP folder with model-swap.
 
 This script performs the basic workflow:
-1. Authenticate with the API
-2. Create a project
-3. Upload PDP images
-4. Upload or verify identity
-5. Create model-swap job
-6. Monitor job progress
-7. Download results
+1. Create a project
+2. Upload PDP images
+3. Upload or verify identity
+4. Create model-swap job
+5. Monitor job progress
+6. Download results
+
+Authentication uses an API token generated at https://app.on-model.com/profile?tab=tokens
 """
 
 import argparse
-import base64
 import http.client
 import json
 import random
@@ -25,44 +25,18 @@ import requests
 
 
 class ModelSwap:
-    def __init__(self, base_url, username, password, input_folder, identity_code=None, identity_image=None, output_folder="output", post_process=False):
+    def __init__(self, base_url, token, input_folder, identity_code=None, identity_image=None, output_folder="output", post_process=False):
         self.base_url = base_url.rstrip("/")
-        self.username = username
-        self.password = password
         self.input_folder = Path(input_folder)
         self.identity_code = identity_code
         self.identity_image = Path(identity_image) if identity_image else None
         self.output_folder = Path(output_folder)
         self.post_process = post_process
-        
-        self.access_token = None
+
+        self.access_token = token
         self.project_id = None
         self.project_name = None
-        
-    def login(self):
-        """Authenticate with the API using Basic Auth."""
-        print("Authenticating...")
-        
-        credentials = f"{self.username}:{self.password}"
-        basic_auth = base64.b64encode(credentials.encode()).decode()
-        headers = {"Authorization": f"Basic {basic_auth}"}
-        
-        try:
-            response = requests.post(f"{self.base_url}/auth/login", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.access_token = data["token"]
-                print("Authentication successful")
-                return True
-            else:
-                print(f"Authentication failed: {response.status_code}")
-                print(f"Response: {response.text}")
-                return False
-        except Exception as e:
-            print(f"Authentication error: {e}")
-            return False
-    
+
     def get_auth_headers(self):
         """Get headers with Bearer token."""
         if not self.access_token:
@@ -70,7 +44,7 @@ class ModelSwap:
         return {"Authorization": f"Bearer {self.access_token}"}
 
     def _request_with_retry(self, method, url, max_retries=5, initial_delay=1.0, max_delay=60.0, **kwargs):
-        """Make an authenticated request with retry on rate limiting (429) and re-auth on token expiry (401).
+        """Make an authenticated request with retry on rate limiting (429).
 
         Args:
             method: HTTP method ('get', 'post', etc.)
@@ -90,14 +64,10 @@ class ModelSwap:
             headers = {**kwargs.pop("headers", {}), **self.get_auth_headers()}
             response = request_func(url, headers=headers, **kwargs)
 
-            # Handle 401 - token expired, re-authenticate and retry once
+            # Handle 401 - token expired or invalid
             if response.status_code == 401:
-                print("Token expired, re-authenticating...")
-                if self.login():
-                    headers = {**self.get_auth_headers()}
-                    response = request_func(url, headers=headers, **kwargs)
-                if response.status_code != 429:
-                    return response
+                print("Token expired or invalid. Generate a new one at https://app.on-model.com/profile?tab=tokens")
+                return response
 
             # Not rate limited - return immediately
             if response.status_code != 429:
@@ -505,11 +475,7 @@ class ModelSwap:
         print("Model Swap")
         print("=" * 70)
         
-        # Step 1: Authenticate
-        if not self.login():
-            return False
-        
-        # Step 2: Upload PDP images
+        # Step 1: Upload PDP images
         file_ids = self.upload_pdp_images()
         if not file_ids:
             print("No images uploaded")
@@ -581,16 +547,10 @@ def main():
         help="API base URL (default: https://v2.api.piktid.com)"
     )
     parser.add_argument(
-        "--username",
+        "--token",
         type=str,
         required=True,
-        help="API username (required)"
-    )
-    parser.add_argument(
-        "--password",
-        type=str,
-        required=True,
-        help="API password (required)"
+        help="API token from https://app.on-model.com/profile?tab=tokens"
     )
     parser.add_argument(
         "--post-process",
@@ -599,20 +559,13 @@ def main():
     )
     
     args = parser.parse_args()
-    
-    if not args.username:
-        parser.error("--username is required")
-    
-    if not args.password:
-        parser.error("--password is required")
-    
+
     if not args.identity_code and not args.identity_image:
         parser.error("Either --identity-code or --identity-image must be provided")
-    
+
     processor = ModelSwap(
         base_url=args.base_url,
-        username=args.username,
-        password=args.password,
+        token=args.token,
         input_folder=args.input_folder,
         identity_code=args.identity_code,
         identity_image=args.identity_image,

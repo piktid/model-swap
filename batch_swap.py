@@ -12,16 +12,14 @@ Usage:
     # Process all subfolders in a directory
     python batch_swap.py \
         --input-dir PDP/ \
-        --username your_email@example.com \
-        --password your_password \
+        --token YOUR_API_TOKEN \
         --identity-code PiktidPremium \
         --output-dir results/
 
     # Process specific folders
     python batch_swap.py \
         --input-folders PDP/ARTICLE1 PDP/ARTICLE2 PDP/ARTICLE3 \
-        --username your_email@example.com \
-        --password your_password \
+        --token YOUR_API_TOKEN \
         --identity-image identities/female/Lisa.jpg \
         --output-dir results/ \
         --parallel 5
@@ -37,15 +35,14 @@ from pathlib import Path
 from model_swap import ModelSwap
 
 
-def process_single_pdp(base_url, username, password, input_folder, identity_code,
+def process_single_pdp(base_url, token, input_folder, identity_code,
                        identity_image, output_folder, post_process):
     """Process a single PDP folder. Runs in its own thread with its own ModelSwap instance."""
     start = time.time()
 
     processor = ModelSwap(
         base_url=base_url,
-        username=username,
-        password=password,
+        token=token,
         input_folder=str(input_folder),
         identity_code=identity_code,
         identity_image=identity_image,
@@ -83,10 +80,7 @@ def main():
     )
 
     parser.add_argument(
-        "--username", type=str, required=True, help="API username (required)"
-    )
-    parser.add_argument(
-        "--password", type=str, required=True, help="API password (required)"
+        "--token", type=str, required=True, help="API token from https://app.on-model.com/profile?tab=tokens"
     )
     parser.add_argument(
         "--identity-code", type=str, default=None, help="Existing identity code to use"
@@ -170,8 +164,7 @@ def main():
             future = executor.submit(
                 process_single_pdp,
                 args.base_url,
-                args.username,
-                args.password,
+                args.token,
                 folder,
                 args.identity_code,
                 args.identity_image,
