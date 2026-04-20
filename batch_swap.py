@@ -36,7 +36,7 @@ from model_swap import ModelSwap
 
 
 def process_single_pdp(base_url, token, input_folder, identity_code,
-                       identity_image, output_folder, post_process):
+                       identity_image, output_folder, post_process, model):
     """Process a single PDP folder. Runs in its own thread with its own ModelSwap instance."""
     start = time.time()
 
@@ -48,6 +48,7 @@ def process_single_pdp(base_url, token, input_folder, identity_code,
         identity_image=identity_image,
         output_folder=str(output_folder),
         post_process=post_process,
+        model=model,
     )
 
     success = processor.run()
@@ -104,6 +105,13 @@ def main():
         "--post-process", action="store_true", help="Enable post-processing (default: False)"
     )
     parser.add_argument(
+        "--model",
+        choices=["auto", "onda", "nano_banana_pro"],
+        default="auto",
+        help="Generation engine. 'auto' (default) uses Onda (PiktID proprietary). "
+             "Use 'nano_banana_pro' to swap via Google's Nano Banana Pro.",
+    )
+    parser.add_argument(
         "--parallel",
         type=int,
         default=3,
@@ -146,6 +154,7 @@ def main():
     print(f"  Parallel workers:   {parallel}")
     print(f"  Output directory:   {output_dir}")
     print(f"  Post-processing:    {args.post_process}")
+    print(f"  Model:              {args.model}")
     print(f"  API base URL:       {args.base_url}")
     print("=" * 70)
 
@@ -170,6 +179,7 @@ def main():
                 args.identity_image,
                 per_folder_output,
                 args.post_process,
+                args.model,
             )
             future_to_folder[future] = folder.name
 
@@ -219,6 +229,7 @@ def main():
                 "configuration": {
                     "parallel": parallel,
                     "post_process": args.post_process,
+                    "model": args.model,
                     "base_url": args.base_url,
                     "identity_code": args.identity_code,
                     "identity_image": args.identity_image,

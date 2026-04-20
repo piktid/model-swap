@@ -142,6 +142,22 @@ $ python model_swap.py \
   --post-process
 ```
 
+## Advanced: choosing a generation model
+
+On-Model runs model-swap through PiktID's proprietary **Onda** engine by default. You can route a job to Google's **Nano Banana Pro** instead with the `--model` flag:
+
+```bash
+$ python model_swap.py \
+  --input-folder PDP/ARTICLE123 \
+  --token YOUR_API_TOKEN \
+  --identity-code PiktidSummer \
+  --model nano_banana_pro
+```
+
+Accepted values: `auto` (default, uses Onda), `onda`, `nano_banana_pro`.
+
+Every entry in the job results response carries a `model_used` field indicating which engine actually produced that image. The script prints it alongside each downloaded file (e.g. `Downloaded: img_001_v0.jpg (model: onda)`), and the raw value is preserved in `metadata.json`.
+
 ## Command Line Options
 
 ```
@@ -152,6 +168,7 @@ $ python model_swap.py \
 --output-folder     Output folder for results (default: output)
 --base-url          API base URL (default: https://v2.api.piktid.com)
 --post-process      Enable post-processing (default: False)
+--model             Generation engine: auto | onda | nano_banana_pro (default: auto)
 ```
 
 **Note:** Either `--identity-code` or `--identity-image` must be provided.

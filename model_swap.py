@@ -25,13 +25,14 @@ import requests
 
 
 class ModelSwap:
-    def __init__(self, base_url, token, input_folder, identity_code=None, identity_image=None, output_folder="output", post_process=False):
+    def __init__(self, base_url, token, input_folder, identity_code=None, identity_image=None, output_folder="output", post_process=False, model="auto"):
         self.base_url = base_url.rstrip("/")
         self.input_folder = Path(input_folder)
         self.identity_code = identity_code
         self.identity_image = Path(identity_image) if identity_image else None
         self.output_folder = Path(output_folder)
         self.post_process = post_process
+        self.model = model
 
         self.access_token = token
         self.project_id = None
@@ -332,7 +333,10 @@ class ModelSwap:
             "project_id": self.project_id,
             "images": file_ids,
             "identity_code": identity_code,
-            "post_process": self.post_process
+            "post_process": self.post_process,
+            "swap_options": {
+                "model": self.model,
+            },
         }
         
         try:
@@ -453,8 +457,12 @@ class ModelSwap:
                                 output_path = self.output_folder / filename
                                 with open(output_path, "wb") as f:
                                     f.write(img_response.content)
-                                
-                                print(f"Downloaded: {filename}")
+
+                                model_used = result.get("model_used")
+                                if model_used:
+                                    print(f"Downloaded: {filename} (model: {model_used})")
+                                else:
+                                    print(f"Downloaded: {filename}")
                             except Exception as e:
                                 print(f"Failed to download image {result['image_index']}: {e}")
             
@@ -557,7 +565,14 @@ def main():
         action="store_true",
         help="Enable post-processing (default: False)"
     )
-    
+    parser.add_argument(
+        "--model",
+        choices=["auto", "onda", "nano_banana_pro"],
+        default="auto",
+        help="Generation engine. 'auto' (default) uses Onda (PiktID proprietary). "
+             "Use 'nano_banana_pro' to swap via Google's Nano Banana Pro."
+    )
+
     args = parser.parse_args()
 
     if not args.identity_code and not args.identity_image:
@@ -570,7 +585,8 @@ def main():
         identity_code=args.identity_code,
         identity_image=args.identity_image,
         output_folder=args.output_folder,
-        post_process=args.post_process
+        post_process=args.post_process,
+        model=args.model,
     )
     
     success = processor.run()
