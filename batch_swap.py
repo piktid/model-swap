@@ -106,10 +106,10 @@ def main():
     )
     parser.add_argument(
         "--model",
-        choices=["auto", "onda", "nano_banana_pro"],
+        choices=["auto", "onda", "nano_banana_2"],
         default="auto",
-        help="Generation engine. 'auto' (default) uses Onda (PiktID proprietary). "
-             "Use 'nano_banana_pro' to swap via Google's Nano Banana Pro.",
+        help="Generation engine. 'auto' (default) and 'onda' both use Onda (PiktID "
+             "proprietary). Use 'nano_banana_2' to swap via Google's Nano Banana 2.",
     )
     parser.add_argument(
         "--parallel",

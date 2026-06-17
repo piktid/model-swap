@@ -63,7 +63,7 @@ Ensure your input folder contains Product Detail Page images (JPG, JPEG, or PNG 
 
 > **Step 3** - Choose your identity
 
-You can either use an existing identity code from your gallery or upload a new identity image:
+You can either use an existing identity code from your gallery or upload a new identity image. Don't have one to use? See the [Create Identity](https://github.com/piktid/create-identity) repo to generate a brand-owned AI model from a brief or a reference image.
 
 **Option A: Using an existing identity code**
 ```bash
@@ -144,17 +144,17 @@ $ python model_swap.py \
 
 ## Advanced: choosing a generation model
 
-On-Model runs model-swap through PiktID's proprietary **Onda** engine by default. You can route a job to Google's **Nano Banana Pro** instead with the `--model` flag:
+On-Model runs model-swap through PiktID's proprietary **Onda** engine by default. You can route a job to Google's **Nano Banana 2** instead with the `--model` flag:
 
 ```bash
 $ python model_swap.py \
   --input-folder PDP/ARTICLE123 \
   --token YOUR_API_TOKEN \
   --identity-code PiktidSummer \
-  --model nano_banana_pro
+  --model nano_banana_2
 ```
 
-Accepted values: `auto` (default, uses Onda), `onda`, `nano_banana_pro`.
+Accepted values: `auto` (default, uses Onda), `onda`, `nano_banana_2`.
 
 Every entry in the job results response carries a `model_used` field indicating which engine actually produced that image. The script prints it alongside each downloaded file (e.g. `Downloaded: img_001_v0.jpg (model: onda)`), and the raw value is preserved in `metadata.json`.
 
@@ -168,7 +168,7 @@ Every entry in the job results response carries a `model_used` field indicating 
 --output-folder     Output folder for results (default: output)
 --base-url          API base URL (default: https://v2.api.piktid.com)
 --post-process      Enable post-processing (default: False)
---model             Generation engine: auto | onda | nano_banana_pro (default: auto)
+--model             Generation engine: auto | onda | nano_banana_2 (default: auto)
 ```
 
 **Note:** Either `--identity-code` or `--identity-image` must be provided.
@@ -327,6 +327,7 @@ Check the console output for detailed error messages.
 - [On-Model Website](https://on-model.com) — Learn about the platform
 - [On-Model App](https://app.on-model.com) — Try the app (15 free images/month)
 - [Flat-to-Model Repo](https://github.com/piktid/flat-to-model) — Sister repo for flat-lay to on-model
+- [Create Identity Repo](https://github.com/piktid/create-identity) — Generate proprietary AI models from a brief or a reference image
 - [API Documentation](https://docs.piktid.com/docs/v2) — Full API reference
 - [PiktID](https://piktid.com) — Company website
 - [Discord](https://discord.com/invite/FJU39e9Z4P) — Community and support
