@@ -25,7 +25,7 @@ import requests
 
 
 class ModelSwap:
-    def __init__(self, base_url, token, input_folder, identity_code=None, identity_image=None, output_folder="output", post_process=False, model="auto"):
+    def __init__(self, base_url, token, input_folder, identity_code=None, identity_image=None, output_folder="output", post_process=False, model="auto", use_anchor=False):
         self.base_url = base_url.rstrip("/")
         self.input_folder = Path(input_folder)
         self.identity_code = identity_code
@@ -33,6 +33,7 @@ class ModelSwap:
         self.output_folder = Path(output_folder)
         self.post_process = post_process
         self.model = model
+        self.use_anchor = use_anchor
 
         self.access_token = token
         self.project_id = None
@@ -336,6 +337,10 @@ class ModelSwap:
             "post_process": self.post_process,
             "swap_options": {
                 "model": self.model,
+                # Anchors the batch on one output so the model's skin tone stays
+                # consistent across the set. Only sent when enabled, so the job
+                # keeps the API default (off) otherwise.
+                **({"use_anchor": True} if self.use_anchor else {}),
             },
         }
         
@@ -569,8 +574,16 @@ def main():
         "--model",
         choices=["auto", "onda", "nano_banana_2"],
         default="auto",
-        help="Generation engine. 'auto' (default) and 'onda' both use Onda (PiktID "
-             "proprietary). Use 'nano_banana_2' to swap via Google's Nano Banana 2."
+        help="Generation engine. 'auto' (default) and 'nano_banana_2' both swap via "
+             "Google's Nano Banana 2. Use 'onda' for PiktID's proprietary Onda engine, "
+             "which preserves the original garment pixels more literally but runs slower."
+    )
+    parser.add_argument(
+        "--use-anchor",
+        action="store_true",
+        help="Keep the model looking like the same person across the whole batch, with "
+             "steadier skin tone from shot to shot. Only affects jobs with more than one "
+             "output, and is ignored with --model onda. Off by default."
     )
 
     args = parser.parse_args()
@@ -587,6 +600,7 @@ def main():
         output_folder=args.output_folder,
         post_process=args.post_process,
         model=args.model,
+        use_anchor=args.use_anchor,
     )
     
     success = processor.run()

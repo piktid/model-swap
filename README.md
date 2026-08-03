@@ -144,19 +144,33 @@ $ python model_swap.py \
 
 ## Advanced: choosing a generation model
 
-On-Model runs model-swap through PiktID's proprietary **Onda** engine by default. You can route a job to Google's **Nano Banana 2** instead with the `--model` flag:
+On-Model runs model-swap through Google's **Nano Banana 2** by default. You can route a job to PiktID's proprietary **Onda** engine instead with the `--model` flag, which preserves the original garment pixels more literally but runs slower:
 
 ```bash
 $ python model_swap.py \
   --input-folder PDP/ARTICLE123 \
   --token YOUR_API_TOKEN \
   --identity-code PiktidSummer \
-  --model nano_banana_2
+  --model onda
 ```
 
-Accepted values: `auto` (default, uses Onda), `onda`, `nano_banana_2`.
+Accepted values: `auto` (default, uses Nano Banana 2), `nano_banana_2`, `onda`.
 
-Every entry in the job results response carries a `model_used` field indicating which engine actually produced that image. The script prints it alongside each downloaded file (e.g. `Downloaded: img_001_v0.jpg (model: onda)`), and the raw value is preserved in `metadata.json`.
+Every entry in the job results response carries a `model_used` field indicating which engine actually produced that image. The script prints it alongside each downloaded file (e.g. `Downloaded: img_001_v0.jpg (model: nano_banana_2)`), and the raw value is preserved in `metadata.json`.
+
+## Advanced: consistency across a set
+
+By default each image is swapped independently, so skin tone can drift slightly from shot to shot. Pass `--use-anchor` to keep the model looking like the same person across the whole batch:
+
+```bash
+$ python model_swap.py \
+  --input-folder PDP/ARTICLE123 \
+  --token YOUR_API_TOKEN \
+  --identity-code PiktidSummer \
+  --use-anchor
+```
+
+It only has an effect when a run produces more than one output, is ignored with `--model onda`, and costs a little extra time before the batch starts. Worth it for a full PDP sequence of one product; unnecessary for one-off swaps.
 
 ## Command Line Options
 
@@ -169,6 +183,7 @@ Every entry in the job results response carries a `model_used` field indicating 
 --base-url          API base URL (default: https://v2.api.piktid.com)
 --post-process      Enable post-processing (default: False)
 --model             Generation engine: auto | onda | nano_banana_2 (default: auto)
+--use-anchor        Keep skin tone consistent across the set (default: False)
 ```
 
 **Note:** Either `--identity-code` or `--identity-image` must be provided.
@@ -247,6 +262,8 @@ $ python batch_swap.py \
 --output-dir        Base output directory (default: output)
 --base-url          API base URL (default: https://v2.api.piktid.com)
 --post-process      Enable post-processing (default: False)
+--model             Generation engine: auto | onda | nano_banana_2 (default: auto)
+--use-anchor        Keep skin tone consistent within each folder (default: False)
 --parallel          Number of parallel workers (default: 3, max: 5)
 ```
 

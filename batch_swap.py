@@ -36,7 +36,8 @@ from model_swap import ModelSwap
 
 
 def process_single_pdp(base_url, token, input_folder, identity_code,
-                       identity_image, output_folder, post_process, model):
+                       identity_image, output_folder, post_process, model,
+                       use_anchor=False):
     """Process a single PDP folder. Runs in its own thread with its own ModelSwap instance."""
     start = time.time()
 
@@ -49,6 +50,7 @@ def process_single_pdp(base_url, token, input_folder, identity_code,
         output_folder=str(output_folder),
         post_process=post_process,
         model=model,
+        use_anchor=use_anchor,
     )
 
     success = processor.run()
@@ -108,8 +110,16 @@ def main():
         "--model",
         choices=["auto", "onda", "nano_banana_2"],
         default="auto",
-        help="Generation engine. 'auto' (default) and 'onda' both use Onda (PiktID "
-             "proprietary). Use 'nano_banana_2' to swap via Google's Nano Banana 2.",
+        help="Generation engine. 'auto' (default) and 'nano_banana_2' both swap via "
+             "Google's Nano Banana 2. Use 'onda' for PiktID's proprietary Onda engine, "
+             "which preserves the original garment pixels more literally but runs slower.",
+    )
+    parser.add_argument(
+        "--use-anchor",
+        action="store_true",
+        help="Keep the model looking like the same person across each folder's batch, "
+             "with steadier skin tone from shot to shot. Ignored with --model onda. "
+             "Off by default.",
     )
     parser.add_argument(
         "--parallel",
@@ -155,6 +165,7 @@ def main():
     print(f"  Output directory:   {output_dir}")
     print(f"  Post-processing:    {args.post_process}")
     print(f"  Model:              {args.model}")
+    print(f"  Consistency:        {'on' if args.use_anchor else 'off'}")
     print(f"  API base URL:       {args.base_url}")
     print("=" * 70)
 
@@ -180,6 +191,7 @@ def main():
                 per_folder_output,
                 args.post_process,
                 args.model,
+                args.use_anchor,
             )
             future_to_folder[future] = folder.name
 
@@ -230,6 +242,7 @@ def main():
                     "parallel": parallel,
                     "post_process": args.post_process,
                     "model": args.model,
+                    "use_anchor": args.use_anchor,
                     "base_url": args.base_url,
                     "identity_code": args.identity_code,
                     "identity_image": args.identity_image,
